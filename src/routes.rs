@@ -23,7 +23,6 @@ use bonsai_sdk::responses::{
     CreateSessRes, ImgUploadRes, ProofReq, SessionStats, SessionStatusRes, SnarkReq,
     SnarkStatusRes, UploadRes,
 };
-use risc0_zkvm::Receipt;
 use serde_json::json;
 use std::time::Duration;
 use tracing::info;
@@ -48,6 +47,7 @@ pub(crate) async fn get_image_upload(
             let base_url = url_resolver
                 .resolve(&headers)
                 .map_err(|_| Error::ServerUrlResolution)?;
+            info!("base_url: {}", base_url);
             Ok(Json(ImgUploadRes {
                 url: format!(
                     "{}/images/{}",
@@ -70,15 +70,15 @@ pub(crate) async fn put_image_upload(
 }
 
 pub(crate) async fn get_input_upload(
-    State(s): State<AppState>,
+    State(_): State<AppState>,
     Extension(url_resolver): Extension<SharedUrlResolver>,
     headers: HeaderMap,
 ) -> Result<Json<UploadRes>, Error> {
-    let _state = &s.read()?;
     let input_id = uuid::Uuid::new_v4();
     let base_url = url_resolver
         .resolve(&headers)
         .map_err(|_| Error::ServerUrlResolution)?;
+    info!("base_url: {}", base_url);
     Ok(Json(UploadRes {
         url: format!(
             "{}/inputs/{}",
@@ -143,6 +143,7 @@ pub(crate) async fn session_status(
             let base_url = url_resolver
                 .resolve(&headers)
                 .map_err(|_| Error::ServerUrlResolution)?;
+            info!("base_url: {}", base_url);
             Ok(Json(SessionStatusRes {
                 status: status.to_string(),
                 receipt_url: Some(format!(
@@ -188,11 +189,11 @@ pub(crate) async fn snark_status(
         .ok_or_else(|| anyhow::anyhow!("Snark status not found for snark id: {:?}", &snark_id))?;
     let receipt = storage.get_receipt(&snark_id);
     match receipt {
-        Some(bytes) => {
-            let _receipt: Receipt = bincode::deserialize(&bytes)?;
+        Some(_) => {
             let base_url = url_resolver
                 .resolve(&headers)
                 .map_err(|_| Error::ServerUrlResolution)?;
+            info!("base_url: {}", base_url);
             Ok(Json(SnarkStatusRes {
                 status: SessionStatus::Succeeded.to_string(),
                 output: Some(format!(
@@ -233,6 +234,7 @@ pub(crate) async fn get_receipt_upload(
     let base_url = url_resolver
         .resolve(&headers)
         .map_err(|_| Error::ServerUrlResolution)?;
+    info!("base_url: {}", base_url);
     Ok(Json(UploadRes {
         url: format!(
             "{}/receipts/{}",

@@ -15,7 +15,7 @@
 use axum::{
     body::Bytes,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Extension, Json,
 };
@@ -23,7 +23,6 @@ use bonsai_sdk::responses::{
     CreateSessRes, ImgUploadRes, ProofReq, SessionStats, SessionStatusRes, SnarkReq,
     SnarkStatusRes, UploadRes,
 };
-use risc0_zkvm::Receipt;
 use serde_json::json;
 use std::time::Duration;
 use tracing::info;
@@ -32,18 +31,31 @@ use crate::{
     error::Error,
     prover::{ProverHandle, Task},
     state::{AppState, SessionStatus},
+    url_resolver::SharedUrlResolver,
 };
 
 pub(crate) async fn get_image_upload(
     State(s): State<AppState>,
     Path(image_id): Path<String>,
+    Extension(url_resolver): Extension<SharedUrlResolver>,
+    headers: HeaderMap,
 ) -> Result<Json<ImgUploadRes>, Error> {
     let state = &s.read()?;
     match state.get_image(&image_id) {
         Some(_) => Err(Error::ImageIdExists),
-        None => Ok(Json(ImgUploadRes {
-            url: format!("{}/images/{}", state.get_url(), image_id),
-        })),
+        None => {
+            let base_url = url_resolver
+                .resolve(&headers)
+                .map_err(|_| Error::ServerUrlResolution)?;
+            info!("base_url: {}", base_url);
+            Ok(Json(ImgUploadRes {
+                url: format!(
+                    "{}/images/{}",
+                    base_url.as_str().trim_end_matches('/'),
+                    image_id
+                ),
+            }))
+        }
     }
 }
 
@@ -57,11 +69,22 @@ pub(crate) async fn put_image_upload(
     Ok(())
 }
 
-pub(crate) async fn get_input_upload(State(s): State<AppState>) -> Result<Json<UploadRes>, Error> {
-    let state = &s.read()?;
+pub(crate) async fn get_input_upload(
+    State(_): State<AppState>,
+    Extension(url_resolver): Extension<SharedUrlResolver>,
+    headers: HeaderMap,
+) -> Result<Json<UploadRes>, Error> {
     let input_id = uuid::Uuid::new_v4();
+    let base_url = url_resolver
+        .resolve(&headers)
+        .map_err(|_| Error::ServerUrlResolution)?;
+    info!("base_url: {}", base_url);
     Ok(Json(UploadRes {
-        url: format!("{}/inputs/{}", state.get_url(), input_id),
+        url: format!(
+            "{}/inputs/{}",
+            base_url.as_str().trim_end_matches('/'),
+            input_id
+        ),
         uuid: input_id.to_string(),
     }))
 }
@@ -102,6 +125,8 @@ pub(crate) async fn create_session(
 pub(crate) async fn session_status(
     State(s): State<AppState>,
     Path(session_id): Path<String>,
+    Extension(url_resolver): Extension<SharedUrlResolver>,
+    headers: HeaderMap,
 ) -> Result<Json<SessionStatusRes>, Error> {
     let storage = s.read()?;
     let (status, stats) = storage
@@ -114,14 +139,24 @@ pub(crate) async fn session_status(
         cycles: stats.user_cycles,
     });
     match receipt {
-        Some(_) => Ok(Json(SessionStatusRes {
-            status: status.to_string(),
-            receipt_url: Some(format!("{}/receipts/{}", storage.get_url(), session_id)),
-            error_msg: None,
-            state: None,
-            elapsed_time: None,
-            stats,
-        })),
+        Some(_) => {
+            let base_url = url_resolver
+                .resolve(&headers)
+                .map_err(|_| Error::ServerUrlResolution)?;
+            info!("base_url: {}", base_url);
+            Ok(Json(SessionStatusRes {
+                status: status.to_string(),
+                receipt_url: Some(format!(
+                    "{}/receipts/{}",
+                    base_url.as_str().trim_end_matches('/'),
+                    session_id
+                )),
+                error_msg: None,
+                state: None,
+                elapsed_time: None,
+                stats,
+            }))
+        }
         None => Ok(Json(SessionStatusRes {
             status: status.to_string(),
             receipt_url: None,
@@ -145,6 +180,8 @@ pub(crate) async fn create_snark(
 pub(crate) async fn snark_status(
     State(s): State<AppState>,
     Path(snark_id): Path<String>,
+    Extension(url_resolver): Extension<SharedUrlResolver>,
+    headers: HeaderMap,
 ) -> Result<Json<SnarkStatusRes>, Error> {
     let storage = s.read()?;
     storage
@@ -152,11 +189,18 @@ pub(crate) async fn snark_status(
         .ok_or_else(|| anyhow::anyhow!("Snark status not found for snark id: {:?}", &snark_id))?;
     let receipt = storage.get_receipt(&snark_id);
     match receipt {
-        Some(bytes) => {
-            let _receipt: Receipt = bincode::deserialize(&bytes)?;
+        Some(_) => {
+            let base_url = url_resolver
+                .resolve(&headers)
+                .map_err(|_| Error::ServerUrlResolution)?;
+            info!("base_url: {}", base_url);
             Ok(Json(SnarkStatusRes {
                 status: SessionStatus::Succeeded.to_string(),
-                output: Some(format!("{}/receipts/{}", storage.get_url(), snark_id)),
+                output: Some(format!(
+                    "{}/receipts/{}",
+                    base_url.as_str().trim_end_matches('/'),
+                    snark_id
+                )),
                 error_msg: None,
             }))
         }
@@ -182,11 +226,21 @@ pub(crate) async fn get_receipt(
 
 pub(crate) async fn get_receipt_upload(
     State(s): State<AppState>,
+    Extension(url_resolver): Extension<SharedUrlResolver>,
+    headers: HeaderMap,
 ) -> Result<Json<UploadRes>, Error> {
-    let state = &s.read()?;
+    let _state = &s.read()?;
     let receipt_id = uuid::Uuid::new_v4();
+    let base_url = url_resolver
+        .resolve(&headers)
+        .map_err(|_| Error::ServerUrlResolution)?;
+    info!("base_url: {}", base_url);
     Ok(Json(UploadRes {
-        url: format!("{}/receipts/{}", state.get_url(), receipt_id),
+        url: format!(
+            "{}/receipts/{}",
+            base_url.as_str().trim_end_matches('/'),
+            receipt_id
+        ),
         uuid: receipt_id.to_string(),
     }))
 }
@@ -208,4 +262,23 @@ pub(crate) async fn health_check() -> impl IntoResponse {
             "message": "Bonsai REST API is running"
         })),
     )
+}
+
+pub(crate) async fn resolved_server_url(
+    Extension(url_resolver): Extension<SharedUrlResolver>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, Error> {
+    let resolved_url = url_resolver
+        .resolve(&headers)
+        .map_err(|_| Error::ServerUrlResolution)?;
+
+    Ok(Json(json!({
+        "resolved_server_url": resolved_url.to_string(),
+        "headers": {
+            "forwarded": headers.get("forwarded").and_then(|v| v.to_str().ok()),
+            "x-forwarded-proto": headers.get("x-forwarded-proto").and_then(|v| v.to_str().ok()),
+            "x-forwarded-host": headers.get("x-forwarded-host").and_then(|v| v.to_str().ok()),
+            "x-forwarded-port": headers.get("x-forwarded-port").and_then(|v| v.to_str().ok()),
+        }
+    })))
 }

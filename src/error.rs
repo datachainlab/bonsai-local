@@ -42,6 +42,8 @@ pub(crate) enum Error {
     Poisoned,
     #[error("Prover queue is full, please try again later")]
     ProverQueueFull,
+    #[error("Unable to resolve server URL from headers")]
+    ServerUrlResolution,
 }
 
 impl<T> From<PoisonError<T>> for Error {
@@ -55,6 +57,7 @@ impl Error {
         match self {
             Error::ImageIdExists => StatusCode::NO_CONTENT,
             Error::ProverQueueFull => StatusCode::SERVICE_UNAVAILABLE,
+            Error::ServerUrlResolution => StatusCode::BAD_REQUEST,
             Error::Poisoned
             | Error::Bincode { .. }
             | Error::Unspecified { .. }

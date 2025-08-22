@@ -21,8 +21,8 @@ use url::Url;
 #[command(about = "Local Bonsai REST API Server", long_about = None)]
 struct Args {
     /// Server URL (must be http:// or https://)
-    #[arg(value_parser = validate_url)]
-    url: Url,
+    #[arg(long, value_parser = validate_url)]
+    server_url: Option<Url>,
 
     /// Address to listen on (e.g., "127.0.0.1:8080", "0.0.0.0:8080")
     #[arg(long, default_value = "127.0.0.1:8080", value_name = "ADDRESS")]
@@ -35,6 +35,10 @@ struct Args {
     /// Channel buffer size for prover queue
     #[arg(long, default_value = "8", value_name = "SIZE")]
     channel_buffer_size: usize,
+
+    /// Cleanup interval in seconds (default: 60)
+    #[arg(long, default_value = "60", value_name = "SECONDS")]
+    cleanup_interval: u64,
 
     /// Required r0vm version (format: <major>.<minor>, e.g., "1.0", "1.2")
     #[arg(long, value_name = "VERSION")]
@@ -88,9 +92,10 @@ async fn main() -> Result<()> {
 
     let listener = TcpListener::bind(&args.listen_address).await?;
     let options = bonsai_local::ServerOptions {
-        url: args.url,
+        server_url: args.server_url,
         ttl: Duration::from_secs(args.ttl),
         channel_buffer_size: args.channel_buffer_size,
+        cleanup_interval: Duration::from_secs(args.cleanup_interval),
     };
     bonsai_local::serve(listener, options).await?;
     if let Some(f) = shutdown_fn {

@@ -46,6 +46,7 @@ pub struct ServerOptions {
     pub server_url: Option<Url>,
     pub ttl: Duration,
     pub channel_buffer_size: usize,
+    pub cleanup_interval: Duration,
 }
 
 fn app(
@@ -90,8 +91,11 @@ pub async fn serve(listener: TcpListener, options: ServerOptions) -> anyhow::Res
 
     // Start cleanup task
     let cleanup_state = Arc::clone(&state);
+    let cleanup_interval = options.cleanup_interval;
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(60)); // Run cleanup every minute
+        let mut interval = time::interval(cleanup_interval);
+        // Skip the first tick to avoid immediate cleanup on startup
+        interval.tick().await;
         loop {
             interval.tick().await;
             if let Ok(mut state) = cleanup_state.write() {
@@ -197,6 +201,7 @@ mod test {
             server_url: Some(url),
             ttl: Duration::from_secs(3600), // 1 hour for tests
             channel_buffer_size: 8,
+            cleanup_interval: Duration::from_secs(60), // 60 seconds for tests
         };
         let local_bonsai_handle = tokio::spawn(async move { serve(listener, options).await });
 

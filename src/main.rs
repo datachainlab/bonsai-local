@@ -36,6 +36,10 @@ struct Args {
     #[arg(long, default_value = "8", value_name = "SIZE")]
     channel_buffer_size: usize,
 
+    /// Cleanup interval in seconds (default: 60)
+    #[arg(long, default_value = "60", value_name = "SECONDS")]
+    cleanup_interval: u64,
+
     /// Required r0vm version (format: <major>.<minor>, e.g., "1.0", "1.2")
     #[arg(long, value_name = "VERSION")]
     r0vm_version: Option<String>,
@@ -91,6 +95,7 @@ async fn main() -> Result<()> {
         server_url: args.server_url,
         ttl: Duration::from_secs(args.ttl),
         channel_buffer_size: args.channel_buffer_size,
+        cleanup_interval: Duration::from_secs(args.cleanup_interval),
     };
     bonsai_local::serve(listener, options).await?;
     if let Some(f) = shutdown_fn {

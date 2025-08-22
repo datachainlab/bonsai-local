@@ -16,6 +16,7 @@ mod error;
 mod prover;
 mod routes;
 mod state;
+mod url_resolver;
 pub mod version;
 
 use crate::{
@@ -23,9 +24,10 @@ use crate::{
     routes::{
         create_session, create_snark, get_image_upload, get_input_upload, get_receipt,
         get_receipt_upload, health_check, put_image_upload, put_input_upload, put_receipt,
-        session_status, snark_status,
+        resolved_server_url, session_status, snark_status,
     },
     state::BonsaiState,
+    url_resolver::{ServerUrlResolver, SharedUrlResolver},
 };
 use anyhow::Context;
 use axum::{
@@ -41,14 +43,19 @@ use tracing::{info, Level};
 use url::Url;
 
 pub struct ServerOptions {
-    pub url: Url,
+    pub server_url: Option<Url>,
     pub ttl: Duration,
     pub channel_buffer_size: usize,
 }
 
-fn app(state: Arc<RwLock<BonsaiState>>, prover_handle: ProverHandle) -> Router {
+fn app(
+    state: Arc<RwLock<BonsaiState>>,
+    prover_handle: ProverHandle,
+    url_resolver: SharedUrlResolver,
+) -> Router {
     Router::new()
         .route("/health", get(health_check))
+        .route("/resolved-server-url", get(resolved_server_url))
         .route("/images/upload/:image_id", get(get_image_upload))
         .route("/images/:image_id", put(put_image_upload))
         .route("/inputs/upload", get(get_input_upload))
@@ -61,6 +68,7 @@ fn app(state: Arc<RwLock<BonsaiState>>, prover_handle: ProverHandle) -> Router {
         .route("/receipts/:session_id", put(put_receipt))
         .route("/receipts/upload", get(get_receipt_upload))
         .layer(Extension(prover_handle))
+        .layer(Extension(url_resolver))
         .with_state(state)
         .layer(DefaultBodyLimit::max(256 * 1024 * 1024))
         .layer(TraceLayer::new_for_http().on_request(
@@ -70,7 +78,8 @@ fn app(state: Arc<RwLock<BonsaiState>>, prover_handle: ProverHandle) -> Router {
 
 pub async fn serve(listener: TcpListener, options: ServerOptions) -> anyhow::Result<()> {
     let local_addr = listener.local_addr().unwrap();
-    let state = Arc::new(RwLock::new(BonsaiState::new(options.url, options.ttl)));
+    let url_resolver = Arc::new(ServerUrlResolver::new(options.server_url));
+    let state = Arc::new(RwLock::new(BonsaiState::new(options.ttl)));
 
     let (sender, receiver) = mpsc::channel(options.channel_buffer_size);
     let mut prover = Prover::new(receiver, Arc::clone(&state));
@@ -94,7 +103,7 @@ pub async fn serve(listener: TcpListener, options: ServerOptions) -> anyhow::Res
 
     info!("Bonsai started on {local_addr}");
 
-    axum::serve(listener, app(state, prover_handle))
+    axum::serve(listener, app(state, prover_handle, url_resolver))
         .await
         .context(format!("failed to serve Bonsai API on {local_addr}"))
 }
@@ -185,7 +194,7 @@ mod test {
         let local_addr = listener.local_addr().unwrap();
         let url = Url::parse(&format!("http://{}", local_addr)).unwrap();
         let options = ServerOptions {
-            url,
+            server_url: Some(url),
             ttl: Duration::from_secs(3600), // 1 hour for tests
             channel_buffer_size: 8,
         };

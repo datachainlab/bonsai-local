@@ -27,12 +27,10 @@ cargo build --release --features cuda
 ## Usage
 
 ```bash
-Usage: bonsai-local [OPTIONS] <URL>
-
-Arguments:
-  <URL>  Server URL (must be http:// or https://)
+Usage: bonsai-local [OPTIONS]
 
 Options:
+      --server-url <SERVER_URL>     Server URL (must be http:// or https://)
       --listen-address <ADDRESS>    Address to listen on (e.g., "127.0.0.1:8080", "0.0.0.0:8080") [default: 127.0.0.1:8080]
       --ttl <SECONDS>               Time-to-live for cached entries in seconds (default: 14400 = 4 hours) [default: 14400]
       --channel-buffer-size <SIZE>  Channel buffer size for prover queue [default: 8]
@@ -43,7 +41,8 @@ Options:
 Start the server with a URL that will be returned to clients:
 
 ```bash
-bonsai-local http://localhost:8080
+bonsai-local --server-url http://localhost:8080
+2025-08-22T03:21:11.301411Z  INFO bonsai_local: Bonsai started on 127.0.0.1:8080
 ```
 
 ## License

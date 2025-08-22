@@ -19,7 +19,6 @@ use std::{
 };
 
 use risc0_zkvm::SessionStats;
-use url::Url;
 
 pub(crate) type AppState = Arc<RwLock<BonsaiState>>;
 
@@ -59,7 +58,6 @@ impl ToString for SessionStatus {
 }
 
 pub(crate) struct BonsaiState {
-    pub(crate) url: Url,
     pub(crate) ttl: Duration,
     // ImageID - MemoryImage
     pub(crate) images: HashMap<String, EntryWithTimestamp<Vec<u8>>>,
@@ -72,9 +70,8 @@ pub(crate) struct BonsaiState {
 }
 
 impl BonsaiState {
-    pub(crate) fn new(url: Url, ttl: Duration) -> Self {
+    pub(crate) fn new(ttl: Duration) -> Self {
         Self {
-            url,
             ttl,
             images: HashMap::new(),
             inputs: HashMap::new(),
@@ -133,10 +130,6 @@ impl BonsaiState {
             .map(|e| e.data.clone())
     }
 
-    pub(crate) fn get_url(&self) -> String {
-        self.url.to_string().trim_end_matches("/").to_string()
-    }
-
     pub(crate) fn cleanup_expired(&mut self) {
         let ttl = self.ttl;
         self.images.retain(|_, entry| !entry.is_expired(ttl));
@@ -167,9 +160,8 @@ mod tests {
 
     #[test]
     fn test_cleanup_expired_entries() {
-        let url = Url::parse("http://localhost:8080").unwrap();
         let ttl = Duration::from_millis(100);
-        let mut state = BonsaiState::new(url, ttl);
+        let mut state = BonsaiState::new(ttl);
 
         // Add some entries
         state.put_image("image1".to_string(), vec![1, 2, 3]);
@@ -206,9 +198,8 @@ mod tests {
 
     #[test]
     fn test_cleanup_with_mixed_entries() {
-        let url = Url::parse("http://localhost:8080").unwrap();
         let ttl = Duration::from_millis(200);
-        let mut state = BonsaiState::new(url, ttl);
+        let mut state = BonsaiState::new(ttl);
 
         // Add first batch of entries
         state.put_image("old_image".to_string(), vec![1, 2, 3]);
@@ -238,9 +229,8 @@ mod tests {
 
     #[test]
     fn test_no_cleanup_when_not_expired() {
-        let url = Url::parse("http://localhost:8080").unwrap();
         let ttl = Duration::from_secs(10); // Long TTL
-        let mut state = BonsaiState::new(url, ttl);
+        let mut state = BonsaiState::new(ttl);
 
         // Add entries
         state.put_image("image".to_string(), vec![1, 2, 3]);

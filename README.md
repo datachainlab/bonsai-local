@@ -5,7 +5,7 @@ A REST API server that provides an API-compatible alternative to RISC Zero's Bon
 ## Prerequisites
 
 - Docker (required for stark-to-snark proving)
-- r0vm - Install via rzup: `rzup install cargo-risczero 1.2.6` (or your preferred version)
+- r0vm - Install via rzup: `rzup install cargo-risczero 3.0.3` (or your preferred version)
 - CUDA (optional, required for `cuda` feature)
 
 ## Installation

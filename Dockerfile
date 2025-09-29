@@ -27,7 +27,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Install RISC Zero runtime
 RUN curl -L https://risczero.com/install | bash
 ENV PATH="/root/.risc0/bin:${PATH}"
-RUN rzup install rust && rzup install cargo-risczero 1.2.6
+RUN rzup install rust && rzup install cargo-risczero 3.0.3
 
 WORKDIR /app
 

@@ -1,5 +1,14 @@
 FROM ubuntu:24.04
 
+WORKDIR /app
+
+ARG FEATURES=""
+ARG PROFILE="release"
+ARG CARGO_RISCZERO_VARSION="3.0.3"
+
+LABEL jp.datachain.rust.features="[${FEATURES}]"
+LABEL jp.datachain.rust.profile=${PROFILE}
+
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
@@ -9,8 +18,29 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     libssl-dev \
-    git \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+COPY . .
+
+# Build bonsai-local
+RUN --mount=type=cache,target=${CARGO_HOME}/registry \
+    --mount=type=cache,target=/app/target \
+    set -eux; \
+    FLAGS=""; \
+    if [ -n "${FEATURES}" ]; then FLAGS="${FLAGS} --features ${FEATURES}"; fi; \
+    cargo build --profile ${PROFILE} ${FLAGS} \
+    && cp /app/target/${PROFILE}/bonsai-local /usr/local/bin/bonsai-local
+
+# Install RISC Zero runtime
+RUN curl -L https://risczero.com/install | bash
+ENV PATH="/root/.risc0/bin:${PATH}"
+RUN rzup install rust && rzup install cargo-risczero 3.0.3
 
 # Install Docker CLI only
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
@@ -19,23 +49,6 @@ RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /
     apt-get update && \
     apt-get install -y docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
-
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Install RISC Zero runtime
-RUN curl -L https://risczero.com/install | bash
-ENV PATH="/root/.risc0/bin:${PATH}"
-RUN rzup install rust && rzup install cargo-risczero 3.0.3
-
-WORKDIR /app
-
-COPY . .
-
-RUN cargo build --release && \
-    mv target/release/bonsai-local /usr/local/bin/bonsai-local && \
-    rm -rf /app
 
 RUN groupadd -f docker && usermod -aG docker root
 

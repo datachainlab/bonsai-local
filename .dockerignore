@@ -1,0 +1,8 @@
+# Build artifacts
+target/
+Dockerfile
+.dockerignore
+
+# Git
+.git/
+.gitignore
